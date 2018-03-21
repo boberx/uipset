@@ -1,0 +1,2 @@
+uipset_msg_request.set max_size:64
+uipset_msg_request.ipa max_size:16
