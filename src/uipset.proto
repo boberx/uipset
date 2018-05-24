@@ -1,11 +1,12 @@
 syntax = "proto2";
 
 message uipset_msg_response {
-	required uint32 error = 1;
+	required uint32 ret = 1;
+	optional string msg = 2;
 };
 
 message uipset_msg_request {
 	required uint32 cmd = 1;
 	required string set = 2;
-	required string ipa = 3;
+	optional string ent = 3;
 };

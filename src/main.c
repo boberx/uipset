@@ -1,8 +1,5 @@
 #define  _GNU_SOURCE
 
-// https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
-// https://codereview.stackexchange.com/questions/98558/non-blocking-unix-domain-socket
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -45,6 +42,7 @@ int main ( int argc, char* argv[] )
 	int rc = EXIT_FAILURE;
 	int opt;
 	int loop = 0;
+	const char* const logprefix = "main: ";
 
 	/* кол-во одновременных подключений к сокету ? */
 	int backlog = 10;
@@ -81,22 +79,21 @@ int main ( int argc, char* argv[] )
 	}
 
 	int fd = -1;
-//	int cl = -1;
 	struct sockaddr_un addr;
 	int epollfd;
 	struct epoll_event event;
 	struct epoll_event *events;
 
 	// проверка параметров
-	if ( socket_path != 0 )
+	if ( socket_path == 0 )
+		debug ( LOG_ERR, "%spath to socket not specified", logprefix );
+	else
 	{
 		// если прога завершилась некореектно, то удалить сокет
 		unlink ( socket_path );
 
 		if ( ( fd = socket ( AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0 ) ) == -1 )
-		{
-			debug ( LOG_ERR, "socket error" );
-		}
+			debug ( LOG_ERR, "%ssocket error", logprefix );
 		else
 		{
 			memset ( &addr, 0, sizeof ( addr ) );
@@ -106,15 +103,15 @@ int main ( int argc, char* argv[] )
 			strncpy ( addr.sun_path, socket_path, sizeof ( addr.sun_path ) - 1 );
 
 			if ( bind ( fd, (struct sockaddr*)&addr, sizeof ( addr ) ) == -1 )
-				debug ( LOG_ERR, "bind error" );
+				debug ( LOG_ERR, "%sbind error", logprefix );
 			else
 			{
 				chmod ( socket_path, S_IWOTH );
 
 				if ( listen ( fd, backlog ) == -1 )
-					debug ( LOG_ERR, "listen error" );
+					debug ( LOG_ERR, "%slisten error", logprefix );
 				else if ( ( epollfd = epoll_create ( backlog ) ) < 0 )
-					debug ( LOG_ERR, "failed to create epoll context: %s", strerror ( errno ) );
+					debug ( LOG_ERR, "%sfailed to create epoll context: %s", logprefix, strerror ( errno ) );
 				else
 				{
 					event.data.fd = fd;
@@ -122,12 +119,12 @@ int main ( int argc, char* argv[] )
 					int s;
 
 					if ( ( s = epoll_ctl ( epollfd, EPOLL_CTL_ADD, fd, &event ) ) < 0 )
-						debug ( LOG_ERR, "epoll_ctl" );
+						debug ( LOG_ERR, "%sepoll_ctl", logprefix );
 					else
 					{
 						events = calloc ( MAXEVENTS, sizeof event );
 						loop = 1;
-						debug ( LOG_INFO, "start loop" );
+						debug ( LOG_INFO, "%sloop start", logprefix );
 					}
 				}
 			}
@@ -137,6 +134,8 @@ int main ( int argc, char* argv[] )
 	// основной цикл
 	while ( loop == 1 )
 	{
+		debug ( LOG_DEBUG, "%smain loop", logprefix );
+
 		int i = 0;
 		/* возвращает количество (один или более) файловых дескрипторов из списка наблюдения, у которых поменялось состояние
 		(которые готовы к вводу-выводу). */
@@ -145,118 +144,118 @@ int main ( int argc, char* argv[] )
 
 		for ( i = 0; i < n; i ++ )
 		{
-			debug ( LOG_ERR, "n: %d", n );
-			debug ( LOG_ERR, "events[i].data.fd: %d", events[i].data.fd );
+			debug ( LOG_DEBUG, "%smain loop: n: [%d] i: [%d] fd: [%d] events[i].data.fd: [%d]", logprefix, n, i, fd, events[i].data.fd );
 
 			if ( ( events[i].events & EPOLLERR ) || ( events[i].events & EPOLLHUP ) || ( ! ( events[i].events & EPOLLIN ) ) )
 			{
 				/* An error has occured on this fd, or the socket is not ready for reading (why were we notified then?) */
-				debug ( LOG_ERR, "epoll error" );
+				debug ( LOG_DEBUG, "%sepoll error", logprefix );
 				close ( events[i].data.fd );
 				continue;
 			}
 			else if ( fd == events[i].data.fd )
 			{
+				debug ( LOG_DEBUG, "%sloop: 1", logprefix );
+
 				// обработка подключения
 				while ( 1 )
 				{
-				debug ( LOG_ERR, "eblishen" );
+					debug ( LOG_DEBUG, "%loop: 2", logprefix );
 
-				struct sockaddr in_addr;
-				socklen_t in_len;
-				in_len = sizeof ( in_addr );
+					struct sockaddr in_addr;
+					socklen_t in_len;
+					in_len = sizeof ( in_addr );
 
-//				struct sockaddr_in caddr;
-//				memset ( &caddr, 0, sizeof ( caddr ) );
-			//	caddr.sun_family = AF_UNIX;
-				int cfd = accept ( fd, &in_addr, &in_len );
-				debug ( LOG_ERR, "nuuuuuuuuuuuu" );
+					int cfd = accept ( fd, &in_addr, &in_len );
 
-				if ( cfd == -1 )
-				{
-					if ( (errno == EAGAIN) || (errno == EWOULDBLOCK) )
+					debug ( LOG_DEBUG, "%loop: 3", logprefix );
+
+					if ( cfd == -1 )
 					{
-						debug ( LOG_INFO, "tipa ok?");
-						/* We have processed all incoming connections. */
-						break;
+						if ( (errno == EAGAIN) || (errno == EWOULDBLOCK) )
+						{
+							debug ( LOG_DEBUG, "%loop: 4", logprefix );
+							/* We have processed all incoming connections. */
+							break;
+						}
+						else
+						{
+							debug ( LOG_ERR, "%sloop: err: accept", logprefix );
+							break;
+						}
 					}
-					else
-					{
-						debug ( LOG_ERR, "err: accept" );
-						break;
-					}
-				}
 
-				char hbuf[256], sbuf[256];
-				getnameinfo ( &in_addr, in_len, hbuf, sizeof hbuf, sbuf, sizeof sbuf, NI_NUMERICHOST | NI_NUMERICSERV );
-
-debug( LOG_ERR, "Accepted connection on descriptor %d "
-                             "(host=%s, port=%s)\n", cfd, hbuf, sbuf);
-
-				event.data.fd = cfd;
-				event.events = EPOLLIN | EPOLLET;
-				epoll_ctl ( epollfd, EPOLL_CTL_ADD, cfd, &event);
+					event.data.fd = cfd;
+					event.events = EPOLLIN | EPOLLET;
+					epoll_ctl ( epollfd, EPOLL_CTL_ADD, cfd, &event );
 				}
 			}
 			else
 			{
-				// ********
+				debug ( LOG_DEBUG, "%sreceive and decode", logprefix );
+
 				uipset_msg_request req = uipset_msg_request_init_zero;
 
 				pb_istream_t input = pb_istream_from_socket ( events[i].data.fd );
 
+				//  получить и декодировать сообщение
 				if ( ! pb_decode_delimited ( &input, uipset_msg_request_fields, &req ) )
-				{
-					debug ( LOG_INFO, "pidaras!" );
-				}
+					debug ( LOG_ERR, "%spb_decode_delimited failed", logprefix );
 				else
 				{
-					int ir = 1;
+					debug ( LOG_DEBUG, "%smain loop: request: cmd: [%d] set: [%s] has_ent: [%d] ent: [%s]", logprefix, req.cmd, req.set, req.has_ent, req.ent );
+
+					int ir = -1;
+					const char* lst = 0;
+
+					uipset_msg_response rsp = uipset_msg_response_init_zero;
+
+					rsp.ret = ir;
+					rsp.has_msg = false;
+					*rsp.msg = 0;
 
 					switch ( req.cmd )
 					{
 						case UIPSET_CMD_ADD:
-							debug ( LOG_INFO, "add" );
-							ir = ipset_ip_add ( req.set, req.ipa );
+							debug ( LOG_INFO, "%sadd", logprefix );
+							ir = ipset_add ( req.set, req.ent );
 							break;
 						case UIPSET_CMD_DEL:
-							debug ( LOG_INFO, "del" );
-							ir = ipset_ip_del ( req.set, req.ipa );
+							debug ( LOG_INFO, "%sdel", logprefix );
+							ir = ipset_del ( req.set, req.ent );
+							break;
+						case UIPSET_CMD_TST:
+							debug ( LOG_INFO, "%stst", logprefix );
+							ir = ipset_tst ( req.set, req.ent );
+							break;
+						case UIPSET_CMD_LST:
+							debug ( LOG_INFO, "%slst", logprefix );
+							ir = ipset_lst ( req.set, &lst );
+
+							if ( ir == 1 && lst != 0 )
+							{
+								debug ( LOG_DEBUG, "%slst: [%s]", logprefix, lst );
+								debug ( LOG_DEBUG, "%slst:lst strlen: [%d]", logprefix, strlen ( lst ) );
+								strcpy ( rsp.msg, lst );
+								rsp.has_msg = true;
+							}
 							break;
 						default:
-							debug ( LOG_INFO, "chto za nahuy?" );
+							debug ( LOG_INFO, "%sunknown", logprefix );
 							break;
 					}
 
-					uipset_msg_response rsp = uipset_msg_response_init_zero;
+					rsp.ret = ir;
 
-					rsp.error = ir;
+					debug ( LOG_DEBUG, "%srsp.ret: %d", logprefix, rsp.ret );
 
 					pb_ostream_t output = pb_ostream_from_socket ( events[i].data.fd );
 
 					if ( ! pb_encode_delimited ( &output, uipset_msg_response_fields, &rsp ) )
-					{
-					}
+						debug ( LOG_ERR, "%spb_encode_delimited failed", logprefix );
 					else
-					{
-						debug ( LOG_INFO, "ja ja!" );
-					}
+						debug ( LOG_INFO, "%srequest processed", logprefix );
 				}
-
-				// ********
-
-				// обрабтка данных
-//				char buf[512];
-//				debug ( LOG_ERR, "o ja ebuntung" );
-//				ssize_t count = read (events[i].data.fd, buf, sizeof buf);
-//				debug ( LOG_INFO, buf );
-//				if ( strcmp ( buf, "add" ) == 0 )
-//				{
-//					debug ( LOG_INFO, "add" );
-//					ipset_ip_add ( "test", "127.0.0.1" );
-//				}
-//				recv ( cfd, &message, sizeof message, 0);
-				//read ( events[i].data.fd, buf, sizeof ( buf ) );
 			}
 		}
 	}

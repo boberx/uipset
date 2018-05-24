@@ -1,8 +1,6 @@
 #ifndef UIPSET_COMMON_H
 #define UIPSET_COMMON_H
 
-#define PB_NO_ERRMSG
-
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>

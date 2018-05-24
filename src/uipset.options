@@ -1,2 +1,3 @@
-uipset_msg_request.set max_size:64
-uipset_msg_request.ipa max_size:16
+uipset_msg_request.set max_size:34
+uipset_msg_request.ent max_size:16
+uipset_msg_response.msg max_size:512
