@@ -29,7 +29,13 @@ const char* socket_path = 0;
 
 void display_usage ()
 {
-	printf ( "usage:\n" );
+	printf (
+		"Usage: uipsetd [options]\n\noptions:\n"
+		 "  -h            Print usage\n"
+		 "  -v            Print version information\n"
+		 "  -d <level>    Debug level\n"
+		 "  -o            Log to stdout\n"
+		 "  -s [filename] Use this socket patch\n" );
 }
 
 void display_version ()
@@ -85,46 +91,49 @@ int main ( int argc, char* argv[] )
 	struct epoll_event *events;
 
 	// проверка параметров
-	if ( socket_path == 0 )
-		debug ( LOG_ERR, "%spath to socket not specified", logprefix );
-	else
+	if ( rc == EXIT_FAILURE )
 	{
-		// если прога завершилась некореектно, то удалить сокет
-		unlink ( socket_path );
-
-		if ( ( fd = socket ( AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0 ) ) == -1 )
-			debug ( LOG_ERR, "%ssocket error", logprefix );
+		if ( socket_path == 0 )
+			debug ( LOG_ERR, "%spath to socket not specified", logprefix );
 		else
 		{
-			memset ( &addr, 0, sizeof ( addr ) );
+			// если прога завершилась некореектно, то удалить сокет
+			unlink ( socket_path );
 
-			addr.sun_family = AF_UNIX;
-
-			strncpy ( addr.sun_path, socket_path, sizeof ( addr.sun_path ) - 1 );
-
-			if ( bind ( fd, (struct sockaddr*)&addr, sizeof ( addr ) ) == -1 )
-				debug ( LOG_ERR, "%sbind error", logprefix );
+			if ( ( fd = socket ( AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0 ) ) == -1 )
+				debug ( LOG_ERR, "%ssocket error", logprefix );
 			else
 			{
-				chmod ( socket_path, S_IWOTH );
+				memset ( &addr, 0, sizeof ( addr ) );
 
-				if ( listen ( fd, backlog ) == -1 )
-					debug ( LOG_ERR, "%slisten error", logprefix );
-				else if ( ( epollfd = epoll_create ( backlog ) ) < 0 )
-					debug ( LOG_ERR, "%sfailed to create epoll context: %s", logprefix, strerror ( errno ) );
+				addr.sun_family = AF_UNIX;
+
+				strncpy ( addr.sun_path, socket_path, sizeof ( addr.sun_path ) - 1 );
+
+				if ( bind ( fd, (struct sockaddr*)&addr, sizeof ( addr ) ) == -1 )
+					debug ( LOG_ERR, "%sbind error", logprefix );
 				else
 				{
-					event.data.fd = fd;
-					event.events = EPOLLIN | EPOLLET;
-					int s;
+					chmod ( socket_path, S_IWOTH );
 
-					if ( ( s = epoll_ctl ( epollfd, EPOLL_CTL_ADD, fd, &event ) ) < 0 )
-						debug ( LOG_ERR, "%sepoll_ctl", logprefix );
+					if ( listen ( fd, backlog ) == -1 )
+						debug ( LOG_ERR, "%slisten error", logprefix );
+					else if ( ( epollfd = epoll_create ( backlog ) ) < 0 )
+						debug ( LOG_ERR, "%sfailed to create epoll context: %s", logprefix, strerror ( errno ) );
 					else
 					{
-						events = calloc ( MAXEVENTS, sizeof event );
-						loop = 1;
-						debug ( LOG_INFO, "%sloop start", logprefix );
+						event.data.fd = fd;
+						event.events = EPOLLIN | EPOLLET;
+						int s;
+
+						if ( ( s = epoll_ctl ( epollfd, EPOLL_CTL_ADD, fd, &event ) ) < 0 )
+							debug ( LOG_ERR, "%sepoll_ctl", logprefix );
+						else
+						{
+							events = calloc ( MAXEVENTS, sizeof event );
+							loop = 1;
+							debug ( LOG_INFO, "%sloop start", logprefix );
+						}
 					}
 				}
 			}

@@ -1,7 +1,7 @@
 #include "debug.h"
 
-int debuglevel = LOG_DEBUG;
-int outconsole = 1;
+int debuglevel = LOG_INFO;
+int outconsole = 0;
 
 void debug ( int level, const char* format, ... )
 {

@@ -1,0 +1,11 @@
+[Unit]
+Description=uipset server
+DefaultDependencies=no
+After=network.target network-online.target syslog.target iptables.service netfilter-persistent.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/uipsetd -d 5 -s /run/uipsetd.socket
+
+[Install]
+WantedBy=network-online.target
